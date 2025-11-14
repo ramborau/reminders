@@ -1,0 +1,160 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  name          String?
+  password      String
+  emailVerified Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  components    Component[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+// Session model for Better Auth
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Component model (collection of records with triggers and webhook)
+model Component {
+  id            String          @id @default(cuid())
+  name          String
+  occurrenceType OccurrenceType
+  webhookUrl    String
+  status        ComponentStatus @default(ACTIVE)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  userId        String
+
+  // Relations
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  triggers      Trigger[]
+  records       Record[]
+  webhookLogs   WebhookLog[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([status])
+  @@map("components")
+}
+
+// Trigger model (defines when webhooks should fire)
+model Trigger {
+  id            String        @id @default(cuid())
+  componentId   String
+  offset        Int           // 0-7 for monthly, 0-15 for yearly
+  direction     Direction?    // null when offset is 0
+  time          String        // Format: "HH:MM AM/PM" in IST
+  status        TriggerStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  component     Component     @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  webhookLogs   WebhookLog[]
+
+  @@index([componentId])
+  @@index([status])
+  @@map("triggers")
+}
+
+// Record model (individual entries like EMI details or birthdays)
+model Record {
+  id          String    @id @default(cuid())
+  componentId String
+  name        String
+  mobile      String    // Must start with 91, exactly 12 digits
+  emi         Float     // Can be 0 for non-financial records
+  date        String    // For monthly: "1"-"28", For yearly: "DD/MM/YYYY"
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  component   Component @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  webhookLogs WebhookLog[]
+
+  @@index([componentId])
+  @@index([mobile])
+  @@map("records")
+}
+
+// WebhookLog model (tracks webhook execution history)
+model WebhookLog {
+  id              String            @id @default(cuid())
+  componentId     String
+  recordId        String
+  triggerId       String
+  scheduledAt     DateTime          // When it was supposed to fire
+  executedAt      DateTime          @default(now()) // When it actually fired
+  status          WebhookStatus
+  httpStatusCode  Int?
+  requestPayload  String            @db.Text
+  responseBody    String?           @db.Text
+  errorMessage    String?           @db.Text
+  retryCount      Int               @default(0)
+  createdAt       DateTime          @default(now())
+
+  // Relations
+  component       Component         @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  record          Record            @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  trigger         Trigger           @relation(fields: [triggerId], references: [id], onDelete: Cascade)
+
+  @@index([componentId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([executedAt])
+  @@map("webhook_logs")
+}
+
+// Enums
+enum OccurrenceType {
+  MONTHLY
+  YEARLY
+}
+
+enum ComponentStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum TriggerStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum Direction {
+  BEFORE
+  AFTER
+}
+
+enum WebhookStatus {
+  SUCCESS
+  FAILED
+  PENDING
+}
