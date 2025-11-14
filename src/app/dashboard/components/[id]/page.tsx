@@ -6,7 +6,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Trash2, Plus, Play, Pause } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, Edit, Trash2, Plus, Play, Pause, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -36,6 +39,15 @@ interface Component {
   };
 }
 
+interface Record {
+  id: string;
+  name: string;
+  mobile: string;
+  emi: number;
+  date: string;
+  createdAt: string;
+}
+
 export default function ComponentDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -46,9 +58,24 @@ export default function ComponentDetailPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Records state
+  const [records, setRecords] = useState<Record[]>([]);
+  const [isLoadingRecords, setIsLoadingRecords] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
+  const [showDeleteRecordsDialog, setShowDeleteRecordsDialog] = useState(false);
+
   useEffect(() => {
     fetchComponent();
+    fetchRecords();
   }, [componentId]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchRecords();
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
 
   const fetchComponent = async () => {
     try {
@@ -65,6 +92,94 @@ export default function ComponentDetailPage() {
       router.push("/dashboard");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchRecords = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery) params.append("search", searchQuery);
+
+      const response = await fetch(`/api/components/${componentId}/records?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRecords(data.records || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch records:", error);
+    } finally {
+      setIsLoadingRecords(false);
+    }
+  };
+
+  const handleDeleteRecord = async (recordId: string) => {
+    try {
+      const response = await fetch(`/api/components/${componentId}/records/${recordId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        toast.success("Record deleted successfully");
+        fetchRecords();
+        if (component) {
+          setComponent({
+            ...component,
+            _count: {
+              ...component._count,
+              records: component._count.records - 1,
+            },
+          });
+        }
+      } else {
+        toast.error("Failed to delete record");
+      }
+    } catch (error) {
+      toast.error("An error occurred");
+    }
+  };
+
+  const handleDeleteSelectedRecords = async () => {
+    try {
+      await Promise.all(
+        selectedRecords.map((recordId) =>
+          fetch(`/api/components/${componentId}/records/${recordId}`, {
+            method: "DELETE",
+          })
+        )
+      );
+
+      toast.success(`${selectedRecords.length} record(s) deleted successfully`);
+      setSelectedRecords([]);
+      fetchRecords();
+      if (component) {
+        setComponent({
+          ...component,
+          _count: {
+            ...component._count,
+            records: component._count.records - selectedRecords.length,
+          },
+        });
+      }
+    } catch (error) {
+      toast.error("Failed to delete records");
+    } finally {
+      setShowDeleteRecordsDialog(false);
+    }
+  };
+
+  const toggleRecordSelection = (recordId: string) => {
+    setSelectedRecords((prev) =>
+      prev.includes(recordId)
+        ? prev.filter((id) => id !== recordId)
+        : [...prev, recordId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedRecords.length === records.length) {
+      setSelectedRecords([]);
+    } else {
+      setSelectedRecords(records.map((r) => r.id));
     }
   };
 
@@ -225,18 +340,91 @@ export default function ComponentDetailPage() {
                 {component._count.records} record{component._count.records !== 1 ? "s" : ""} in this component
               </CardDescription>
             </div>
-            <Link href={`/dashboard/components/${componentId}/records/new`}>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Record
-              </Button>
-            </Link>
+            <div className="flex gap-2">
+              {selectedRecords.length > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDeleteRecordsDialog(true)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete ({selectedRecords.length})
+                </Button>
+              )}
+              <Link href={`/dashboard/components/${componentId}/records/new`}>
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Record
+                </Button>
+              </Link>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground text-center py-8">
-            Record management coming soon...
-          </p>
+        <CardContent className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or mobile..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {isLoadingRecords ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Loading records...
+            </p>
+          ) : records.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              {searchQuery ? "No records found" : "No records yet. Add your first record to get started."}
+            </p>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedRecords.length === records.length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Mobile</TableHead>
+                    <TableHead>{component.occurrenceType === "MONTHLY" ? "EMI" : "Amount"}</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="w-20">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {records.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedRecords.includes(record.id)}
+                          onCheckedChange={() => toggleRecordSelection(record.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{record.name}</TableCell>
+                      <TableCell>{record.mobile}</TableCell>
+                      <TableCell>₹{record.emi.toLocaleString()}</TableCell>
+                      <TableCell>{record.date}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteRecord(record.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -254,6 +442,25 @@ export default function ComponentDetailPage() {
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
               {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeleteRecordsDialog} onOpenChange={setShowDeleteRecordsDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Records</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedRecords.length} selected record(s)? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteRecordsDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteSelectedRecords}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
