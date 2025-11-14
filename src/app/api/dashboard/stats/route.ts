@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
+import { countUpcomingReminders } from "@/lib/reminder-utils";
 
 export async function GET(request: Request) {
   try {
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
     const userId = session.user.id;
 
     // Get dashboard stats
-    const [totalComponents, totalRecords, upcomingReminders, failedWebhooks] = await Promise.all([
+    const [totalComponents, totalRecords, componentsForReminders, failedWebhooks] = await Promise.all([
       // Count total components for user
       prisma.component.count({
         where: { userId },
@@ -31,8 +32,31 @@ export async function GET(request: Request) {
         },
       }),
 
-      // Count upcoming reminders (next 7 days) - simplified for now
-      0, // TODO: Implement actual upcoming reminders calculation
+      // Get components with triggers and records for upcoming reminders calculation
+      prisma.component.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          occurrenceType: true,
+          status: true,
+          triggers: {
+            select: {
+              id: true,
+              offset: true,
+              direction: true,
+              time: true,
+              status: true,
+            },
+          },
+          records: {
+            select: {
+              id: true,
+              date: true,
+              componentId: true,
+            },
+          },
+        },
+      }),
 
       // Count failed webhooks in last 24 hours
       prisma.webhookLog.count({
@@ -47,6 +71,9 @@ export async function GET(request: Request) {
         },
       }),
     ]);
+
+    // Calculate upcoming reminders (next 7 days)
+    const upcomingReminders = countUpcomingReminders(componentsForReminders, 7);
 
     return NextResponse.json({
       totalComponents,
