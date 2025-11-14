@@ -15,7 +15,7 @@ const updateRecordSchema = z.object({
 // GET single record
 export async function GET(
   request: Request,
-  { params }: { params: { componentId: string; recordId: string } }
+  { params }: { params: Promise<{ componentId: string; recordId: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -26,10 +26,12 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { componentId, recordId } = await params;
+
     const record = await prisma.record.findFirst({
       where: {
-        id: params.recordId,
-        componentId: params.componentId,
+        id: recordId,
+        componentId: componentId,
         component: {
           userId: session.user.id,
         },
@@ -53,7 +55,7 @@ export async function GET(
 // PATCH update record
 export async function PATCH(
   request: Request,
-  { params }: { params: { componentId: string; recordId: string } }
+  { params }: { params: Promise<{ componentId: string; recordId: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -64,14 +66,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { componentId, recordId } = await params;
     const body = await request.json();
     const validatedData = updateRecordSchema.parse(body);
 
     // Verify record exists and belongs to user's component
     const existingRecord = await prisma.record.findFirst({
       where: {
-        id: params.recordId,
-        componentId: params.componentId,
+        id: recordId,
+        componentId: componentId,
         component: {
           userId: session.user.id,
         },
@@ -115,7 +118,7 @@ export async function PATCH(
 
     // Update record
     const record = await prisma.record.update({
-      where: { id: params.recordId },
+      where: { id: recordId },
       data: validatedData,
     });
 
@@ -139,7 +142,7 @@ export async function PATCH(
 // DELETE record
 export async function DELETE(
   request: Request,
-  { params }: { params: { componentId: string; recordId: string } }
+  { params }: { params: Promise<{ componentId: string; recordId: string }> }
 ) {
   try {
     const session = await auth.api.getSession({
@@ -150,11 +153,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { componentId, recordId } = await params;
+
     // Verify record exists and belongs to user's component
     const existingRecord = await prisma.record.findFirst({
       where: {
-        id: params.recordId,
-        componentId: params.componentId,
+        id: recordId,
+        componentId: componentId,
         component: {
           userId: session.user.id,
         },
@@ -167,7 +172,7 @@ export async function DELETE(
 
     // Delete record
     await prisma.record.delete({
-      where: { id: params.recordId },
+      where: { id: recordId },
     });
 
     return NextResponse.json({ success: true });

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Bell, LogOut, User } from "lucide-react";
+import { Bell, LogOut, User, Activity } from "lucide-react";
 import { toast } from "sonner";
 
 export function Navbar() {
@@ -21,11 +21,26 @@ export function Navbar() {
     <nav className="border-b bg-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          <div className="flex items-center">
+          <div className="flex items-center gap-8">
             <Link href="/dashboard" className="flex items-center gap-2">
               <Bell className="h-6 w-6 text-primary" />
               <span className="text-xl font-bold">BotPe Reminders</span>
             </Link>
+            <nav className="flex gap-4">
+              <Link
+                href="/dashboard"
+                className="text-sm font-medium hover:text-primary transition-colors"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/dashboard/webhook-logs"
+                className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1"
+              >
+                <Activity className="h-4 w-4" />
+                Webhook Logs
+              </Link>
+            </nav>
           </div>
 
           <div className="flex items-center gap-4">

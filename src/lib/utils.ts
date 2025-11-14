@@ -51,3 +51,81 @@ export function validateYearlyDate(date: string): boolean {
     dateObj.getDate() === day
   );
 }
+
+/**
+ * Validate a complete record for import/creation
+ */
+export interface RecordValidationResult {
+  isValid: boolean;
+  errors: string[];
+  data?: {
+    name: string;
+    mobile: string;
+    emi: number;
+    date: string;
+  };
+}
+
+export function validateRecord(
+  name: string,
+  mobile: string,
+  emi: number,
+  date: string,
+  occurrenceType: "MONTHLY" | "YEARLY"
+): RecordValidationResult {
+  const errors: string[] = [];
+
+  // Validate name
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    errors.push("Name is required");
+  } else if (trimmedName.length > 100) {
+    errors.push("Name must be less than 100 characters");
+  }
+
+  // Validate mobile
+  const trimmedMobile = mobile.trim();
+  if (!trimmedMobile) {
+    errors.push("Mobile number is required");
+  } else if (!validateMobileNumber(trimmedMobile)) {
+    errors.push("Mobile number must start with 91 and be exactly 12 digits");
+  }
+
+  // Validate EMI
+  if (isNaN(emi) || emi < 0) {
+    errors.push("EMI/Amount must be a non-negative number");
+  }
+
+  // Validate date based on occurrence type
+  const trimmedDate = date.trim();
+  if (!trimmedDate) {
+    errors.push("Date is required");
+  } else if (occurrenceType === "MONTHLY") {
+    const dayOfMonth = parseInt(trimmedDate);
+    if (isNaN(dayOfMonth) || !validateMonthlyDate(dayOfMonth)) {
+      errors.push("For monthly occurrences, date must be between 1 and 28");
+    }
+  } else {
+    if (!validateYearlyDate(trimmedDate)) {
+      errors.push("For yearly occurrences, date must be in DD/MM/YYYY format");
+    }
+  }
+
+  if (errors.length > 0) {
+    return {
+      isValid: false,
+      errors,
+    };
+  }
+
+  return {
+    isValid: true,
+    errors: [],
+    data: {
+      name: trimmedName,
+      mobile: trimmedMobile,
+      emi,
+      date: trimmedDate,
+    },
+  };
+}
